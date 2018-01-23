@@ -17,6 +17,7 @@ import socket
 import struct
 import threading
 import ssl
+import multiprocessing
 
 from six.moves import queue
 
@@ -222,9 +223,9 @@ class TNonblockingServer(object):
     def __init__(self,
                  processor,
                  lsocket,
+                 threads,
                  inputProtocolFactory=None,
-                 outputProtocolFactory=None,
-                 threads=10):
+                 outputProtocolFactory=None):
         self.processor = processor
         self.socket = lsocket
         self.in_protocol = inputProtocolFactory or TBinaryProtocolFactory()
@@ -312,7 +313,7 @@ class TNonblockingServer(object):
             else:
                 connection = self.clients[readable]
                 connection.read()
-                if isinstance(connection.socket, ssl.SSLSocket) and connection.status in (WAIT_LEN, WAIT_MESSAGE):
+                while isinstance(connection.socket, ssl.SSLSocket) and connection.socket.pending() > 0:
                     connection.read()
                 if connection.status == WAIT_PROCESS:
                     itransport = TMemoryBuffer(connection.message)
