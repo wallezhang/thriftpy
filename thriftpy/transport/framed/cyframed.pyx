@@ -1,12 +1,13 @@
-from libc.stdint cimport
+from libc.stdlib cimport malloc, free
+from libc.string cimport memcpy
+from libc.stdint cimport int32_t
 
-int32_t
-from libc.stdlib cimport
-
-malloc, free
-from libc.string cimport
-
-memcpy
+from thriftpy.transport.cybase cimport (
+    TCyBuffer,
+    CyTransportBase,
+    DEFAULT_BUFFER,
+    STACK_STRING_LEN
+)
 
 from .. import TTransportException
 
