@@ -1,13 +1,12 @@
-from libc.stdlib cimport malloc, free
-from libc.string cimport memcpy
-from libc.stdint cimport int32_t
+from libc.stdint cimport
 
-from thriftpy.transport.cybase cimport (
-    TCyBuffer,
-    CyTransportBase,
-    DEFAULT_BUFFER,
-    STACK_STRING_LEN
-)
+int32_t
+from libc.stdlib cimport
+
+malloc, free
+from libc.string cimport
+
+memcpy
 
 from .. import TTransportException
 
@@ -119,6 +118,9 @@ cdef class TCyFramedTransport(CyTransportBase):
         self.rbuf.clean()
         self.rframe_buf.clean()
         self.wframe_buf.clean()
+
+    def getvalue(self):
+        return self._trans.getvalue()
 
 
 class TCyFramedTransportFactory(object):
