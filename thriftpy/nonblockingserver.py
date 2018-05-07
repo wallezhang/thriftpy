@@ -17,7 +17,7 @@ import socket
 import struct
 import threading
 import ssl
-import multiprocessing
+from errno import EINTR
 
 from six.moves import queue
 
@@ -101,6 +101,7 @@ class Connection(object):
         self.status = WAIT_LEN
         self.len = 0
         self.message = b''
+        self.message_to_send = b''
         self.lock = threading.Lock()
         self.wake_up = wake_up
 
@@ -151,17 +152,12 @@ class Connection(object):
             if len(self.message) == self.len:
                 self.status = WAIT_PROCESS
 
+    @locked
     @socket_exception
     def write(self):
         """Writes data from socket and switch state."""
-        assert self.status == SEND_ANSWER
-        sent = self.socket.send(self.message)
-        if sent == len(self.message):
-            self.status = WAIT_LEN
-            self.message = b''
-            self.len = 0
-        else:
-            self.message = self.message[sent:]
+        sent = self.socket.send(self.message_to_send)
+        self.message_to_send = self.message_to_send[sent:]
 
     @locked
     def ready(self, all_ok, message):
@@ -176,25 +172,19 @@ class Connection(object):
 
         The one wakes up main thread.
         """
-        assert self.status == WAIT_PROCESS
         if not all_ok:
             self.close()
             self.wake_up()
             return
         self.len = 0
-        if len(message) == 0:
-            # it was a oneway request, do not write answer
-            self.message = b''
-            self.status = WAIT_LEN
-        else:
-            self.message = struct.pack('!i', len(message)) + message
-            self.status = SEND_ANSWER
+        if len(message) > 0:
+            self.message_to_send += struct.pack('!i', len(message)) + message
         self.wake_up()
 
     @locked
     def is_writeable(self):
         """Return True if connection should be added to write list of select"""
-        return self.status == SEND_ANSWER
+        return len(self.message_to_send) > 0
 
     # it's not necessary, but...
     @locked
@@ -301,7 +291,14 @@ class TNonblockingServer(object):
         WARNING! You must call prepare() BEFORE calling handle()
         """
         assert self.prepared, "You have to call prepare before handle"
-        rset, wset, xset = self._select()
+        try:
+            rset, wset, xset = self._select()
+        except select.error as err:
+            if err.args[0] != EINTR:
+                raise
+            else:
+                return
+
         for readable in rset:
             if readable == self._read.fileno():
                 # don't care i just need to clean readable flag
@@ -322,6 +319,9 @@ class TNonblockingServer(object):
                     oprot = self.out_protocol.get_protocol(otransport)
                     self.tasks.put([self.processor, iprot, oprot,
                                     otransport, connection.ready])
+                    # receive next data packet
+                    connection.status = WAIT_LEN
+                    connection.message = b''
         for writeable in wset:
             self.clients[writeable].write()
         for oob in xset:
