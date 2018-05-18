@@ -17,7 +17,7 @@ import socket
 import struct
 import threading
 import ssl
-from errno import EINTR
+from errno import EINTR, EBADF
 
 from six.moves import queue
 
@@ -277,12 +277,19 @@ class TNonblockingServer(object):
         readable = [self.socket.sock.fileno(), self._read.fileno()]
         writable = []
         for i, connection in list(self.clients.items()):
-            if connection.is_readable():
-                readable.append(connection.fileno())
-            if connection.is_writeable():
-                writable.append(connection.fileno())
-            if connection.is_closed():
-                del self.clients[i]
+            try:
+                if connection.is_readable():
+                    readable.append(connection.fileno())
+                if connection.is_writeable():
+                    writable.append(connection.fileno())
+                if connection.is_closed():
+                    del self.clients[i]
+            except socket.error as err:
+                if err.args[0] == EBADF:
+                    logger.error('connection %s is closed already! err: %s' % (connection, err))
+                    del self.clients[i]
+                else:
+                    logger.exception(err.message)
         return select.select(readable, writable, readable)
 
     def handle(self):
