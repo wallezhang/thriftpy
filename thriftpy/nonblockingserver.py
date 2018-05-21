@@ -176,7 +176,6 @@ class Connection(object):
             self.close()
             self.wake_up()
             return
-        self.len = 0
         if len(message) > 0:
             self.message_to_send += struct.pack('!i', len(message)) + message
         self.wake_up()
@@ -329,6 +328,7 @@ class TNonblockingServer(object):
                     # receive next data packet
                     connection.status = WAIT_LEN
                     connection.message = b''
+                    connection.len = 0
         for writeable in wset:
             self.clients[writeable].write()
         for oob in xset:
